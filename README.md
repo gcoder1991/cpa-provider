@@ -7,6 +7,12 @@ The extension reads the OpenAI-compatible `/v1/models` endpoint, registers the r
 ## Install
 
 ```bash
+pi install npm:cpa-provider
+```
+
+Git installs are also supported:
+
+```bash
 pi install https://github.com/gcoder1991/cpa-provider
 ```
 
@@ -65,5 +71,5 @@ pi update --extensions
 ## Remove
 
 ```bash
-pi remove https://github.com/gcoder1991/cpa-provider
+pi remove npm:cpa-provider
 ```
