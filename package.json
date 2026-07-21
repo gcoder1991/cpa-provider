@@ -1,0 +1,25 @@
+{
+  "name": "cpa-provider",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLIProxyAPI provider extension for pi with automatic model discovery",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "cliproxyapi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gcoder1991/cpa-provider.git"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
