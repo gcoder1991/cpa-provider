@@ -50,6 +50,25 @@ Both variables can be used together:
 CPA_BASE_URL=https://cpa.example.com CPA_API_KEY=your-api-key pi
 ```
 
+## Fast mode
+
+Toggle OpenAI Fast mode for CPA requests:
+
+```text
+/cpa-fast on
+/cpa-fast off
+/cpa-fast status
+/cpa-info
+```
+
+To enable it at startup:
+
+```bash
+CPA_FAST_MODE=1 pi
+```
+
+Fast mode sends `service_tier: "priority"`, the backward-compatible name for OpenAI Fast mode. OpenAI/Codex text models use `/v1/responses`; other discovered models keep `/v1/chat/completions`.
+
 ## Model metadata
 
 `/v1/models` normally returns model IDs but not capability metadata. Known IDs are matched against pi.dev catalogs for:

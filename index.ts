@@ -7,6 +7,7 @@
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { openAIResponsesApi } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const PROVIDER_ID = "cpa";
@@ -84,6 +85,11 @@ function metadataProviderIds(model: CpaModel): string[] {
 	return [];
 }
 
+function useResponsesApi(model: CpaModel): boolean {
+	const value = `${model.ownedBy ?? ""}/${model.id}`.toLowerCase();
+	return (value.includes("openai") || value.includes("gpt") || value.includes("codex")) && !value.includes("image");
+}
+
 function parseCatalog(payload: unknown): Model<Api>[] {
 	const entries = Array.isArray(payload)
 		? payload
@@ -113,7 +119,7 @@ async function loadMetadata(models: readonly CpaModel[], signal?: AbortSignal): 
 	return new Map(catalogs.flatMap(([providerId, entries]) => entries.map((model) => [`${providerId}\0${model.id}`, model])));
 }
 
-async function discoverModels(apiKey: string | undefined, signal?: AbortSignal): Promise<Model<"openai-completions">[]> {
+async function discoverModels(apiKey: string | undefined, signal?: AbortSignal): Promise<Model<Api>[]> {
 	const payload = await fetchJson(`${inferenceUrl}/models`, apiKey, signal);
 	const models = parseModelList(payload);
 	const metadata = await loadMetadata(models, signal);
@@ -124,7 +130,7 @@ async function discoverModels(apiKey: string | undefined, signal?: AbortSignal):
 		return {
 			id: entry.id,
 			name: entry.name ?? source?.name ?? entry.id,
-			api: "openai-completions",
+			api: useResponsesApi(entry) ? "openai-responses" : "openai-completions",
 			provider: PROVIDER_ID,
 			baseUrl: inferenceUrl,
 			reasoning: source?.reasoning ?? false,
@@ -138,17 +144,63 @@ async function discoverModels(apiKey: string | undefined, signal?: AbortSignal):
 }
 
 export default function cpaExtension(pi: ExtensionAPI): void {
+	let fastMode = /^(1|true|on)$/iu.test(process.env.CPA_FAST_MODE ?? "");
+	const responsesApi = openAIResponsesApi();
+
+	pi.registerCommand("cpa-fast", {
+		description: "Toggle OpenAI Fast mode for CPA requests",
+		getArgumentCompletions: (prefix) =>
+			["on", "off", "status"]
+				.filter((value) => value.startsWith(prefix.trim().toLowerCase()))
+				.map((value) => ({ value, label: value })),
+		handler: async (args, context) => {
+			const value = args.trim().toLowerCase();
+			if (value === "on") fastMode = true;
+			else if (value === "off") fastMode = false;
+			else if (value && value !== "status") {
+				context.ui.notify("Usage: /cpa-fast on|off|status", "warning");
+				return;
+			}
+			context.ui.notify(`CPA Fast mode: ${fastMode ? "on" : "off"}`, "info");
+		},
+	});
+
+	pi.registerCommand("cpa-info", {
+		description: "Show CPA provider status",
+		handler: async (_args, context) => {
+			const model = context.model?.provider === PROVIDER_ID ? context.model.id : "not selected";
+			context.ui.notify(
+				[
+					`CPA_BASE_URL: ${serverUrl}`,
+					`Fast mode: ${fastMode ? "on" : "off"}`,
+					`Model: ${model}`,
+				].join("\n"),
+				"info",
+			);
+		},
+	});
+
 	pi.registerProvider(PROVIDER_ID, {
 		name: "CLIProxyAPI",
 		baseUrl: inferenceUrl,
 		apiKey: "$CPA_API_KEY",
-		api: "openai-completions",
+		api: "openai-responses",
 		models: [],
+		streamSimple: (model, context, options) =>
+			responsesApi.streamSimple(model, context, {
+				...options,
+				onPayload: async (payload, currentModel) => {
+					const transformed = (await options?.onPayload?.(payload, currentModel)) ?? payload;
+					if (!fastMode || typeof transformed !== "object" || transformed === null) return transformed;
+					return { ...transformed, service_tier: "priority" };
+				},
+			}),
 		refreshModels: async (context) => {
 			const stored = await context.store.read();
 			const cached = (stored?.models ?? []).filter(
-				(model): model is Model<"openai-completions"> =>
-					model.provider === PROVIDER_ID && model.api === "openai-completions",
+				(model): model is Model<Api> =>
+					model.provider === PROVIDER_ID &&
+					(model.api === "openai-responses" || model.api === "openai-completions"),
 			);
 			if (!context.allowNetwork || context.signal?.aborted) return cached;
 			const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
