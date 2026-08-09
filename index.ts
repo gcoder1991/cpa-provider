@@ -1,5 +1,5 @@
 /**
- * CLIProxyAPI provider for pi 0.80.x.
+ * CLIProxyAPI provider for pi 0.84.x.
  *
  * Install: ~/.pi/agent/extensions/cpa-provider/index.ts
  * Configure: /login cpa
@@ -196,16 +196,17 @@ export default function cpaExtension(pi: ExtensionAPI): void {
 				},
 			}),
 		refreshModels: async (context) => {
-			const stored = await context.store.read();
-			const cached = (stored?.models ?? []).filter(
+			const cached = (context.stored?.models ?? []).filter(
 				(model): model is Model<Api> =>
 					model.provider === PROVIDER_ID &&
 					(model.api === "openai-responses" || model.api === "openai-completions"),
 			);
-			if (!context.allowNetwork || context.signal?.aborted) return cached;
+			if (!context.allowNetwork || context.signal.aborted) return cached;
 			const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
 			const models = await discoverModels(apiKey, context.signal);
-			if (!context.signal?.aborted) await context.store.write({ models, checkedAt: Date.now() });
+			if (!context.signal.aborted) {
+				await context.publish({ persist: { models, checkedAt: Date.now() } });
+			}
 			return models;
 		},
 	});
