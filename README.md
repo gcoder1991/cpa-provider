@@ -2,7 +2,7 @@
 
 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) provider extension for [pi](https://pi.dev).
 
-The extension reads the OpenAI-compatible `/v1/models` endpoint, registers the returned models in pi, and enriches known model IDs with context limits, reasoning support, image input, and output limits from the pi.dev model catalog.
+The extension reads the OpenAI-compatible `/v1/models` endpoint, registers the returned models in pi, and enriches known model IDs with context limits, reasoning support, image input, and output limits from pi's bundled model catalog.
 
 ## Install
 
@@ -71,7 +71,7 @@ Fast mode sends `service_tier: "priority"`, the backward-compatible name for Ope
 
 ## Model metadata
 
-`/v1/models` normally returns model IDs but not capability metadata. Known IDs are matched against pi.dev catalogs for:
+`/v1/models` normally returns model IDs but not capability metadata. Known IDs are matched against the model catalog bundled with pi, without additional network requests, for:
 
 - context window
 - maximum output tokens

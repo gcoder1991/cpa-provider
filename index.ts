@@ -7,6 +7,7 @@
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { getBuiltinModels, type BuiltinProvider } from "@earendil-works/pi-ai/providers/all";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -14,8 +15,6 @@ const PROVIDER_ID = "cpa";
 const DEFAULT_SERVER_URL = "http://127.0.0.1:8317";
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const DEFAULT_MAX_TOKENS = 16384;
-const CATALOG_BASE_URL = "https://pi.dev";
-
 interface CpaModel {
 	id: string;
 	name?: string;
@@ -71,7 +70,7 @@ function parseModelList(payload: unknown): CpaModel[] {
 	});
 }
 
-function metadataProviderIds(model: CpaModel): string[] {
+function metadataProviderIds(model: CpaModel): BuiltinProvider[] {
 	const value = `${model.ownedBy ?? ""}/${model.id}`.toLowerCase();
 	if (value.includes("claude") || value.includes("anthropic")) return ["anthropic"];
 	if (value.includes("gemini") || value.includes("google")) return ["google"];
@@ -89,40 +88,19 @@ function useResponsesApi(model: CpaModel): boolean {
 	const value = `${model.ownedBy ?? ""}/${model.id}`.toLowerCase();
 	return (value.includes("openai") || value.includes("gpt") || value.includes("codex")) && !value.includes("image");
 }
-
-function parseCatalog(payload: unknown): Model<Api>[] {
-	const entries = Array.isArray(payload)
-		? payload
-		: typeof payload === "object" && payload !== null && "models" in payload && Array.isArray(payload.models)
-			? payload.models
-			: typeof payload === "object" && payload !== null
-				? Object.values(payload)
-				: [];
-	return entries.filter(
-		(entry): entry is Model<Api> =>
-			typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string",
-	);
-}
-
-async function loadMetadata(models: readonly CpaModel[], signal?: AbortSignal): Promise<Map<string, Model<Api>>> {
+function loadMetadata(models: readonly CpaModel[]): Map<string, Model<Api>> {
 	const providerIds = [...new Set(models.flatMap(metadataProviderIds))];
-	const catalogs = await Promise.all(
-		providerIds.map(async (providerId) => {
-			try {
-				const url = new URL(`/api/models/providers/${encodeURIComponent(providerId)}`, CATALOG_BASE_URL);
-				return [providerId, parseCatalog(await fetchJson(url.toString(), undefined, signal))] as const;
-			} catch {
-				return [providerId, []] as const;
-			}
-		}),
+	return new Map(
+		providerIds.flatMap((providerId) =>
+			getBuiltinModels(providerId).map((model) => [`${providerId}\0${model.id}`, model]),
+		),
 	);
-	return new Map(catalogs.flatMap(([providerId, entries]) => entries.map((model) => [`${providerId}\0${model.id}`, model])));
 }
 
 async function discoverModels(apiKey: string | undefined, signal?: AbortSignal): Promise<Model<Api>[]> {
 	const payload = await fetchJson(`${inferenceUrl}/models`, apiKey, signal);
 	const models = parseModelList(payload);
-	const metadata = await loadMetadata(models, signal);
+	const metadata = loadMetadata(models);
 	return models.map((entry) => {
 		const source = metadataProviderIds(entry)
 			.map((providerId) => metadata.get(`${providerId}\0${entry.id}`))
