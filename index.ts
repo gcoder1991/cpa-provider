@@ -102,9 +102,12 @@ async function discoverModels(apiKey: string | undefined, signal?: AbortSignal):
 	const models = parseModelList(payload);
 	const metadata = loadMetadata(models);
 	return models.map((entry) => {
-		const source = metadataProviderIds(entry)
+		const providerIds = metadataProviderIds(entry);
+		const source = providerIds
 			.map((providerId) => metadata.get(`${providerId}\0${entry.id}`))
 			.find((model) => model !== undefined);
+		// Kimi rejects the OpenAI "developer" role (official moonshotai catalog sets this too)
+		const compat = providerIds.includes("moonshotai") ? { supportsDeveloperRole: false } : undefined;
 		return {
 			id: entry.id,
 			name: entry.name ?? source?.name ?? entry.id,
@@ -113,6 +116,7 @@ async function discoverModels(apiKey: string | undefined, signal?: AbortSignal):
 			baseUrl: inferenceUrl,
 			reasoning: source?.reasoning ?? false,
 			thinkingLevelMap: source?.thinkingLevelMap,
+			...(source?.compat ?? compat ? { compat: { ...source?.compat, ...compat } } : {}),
 			input: source?.input ?? ["text"],
 			cost: source?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: source?.contextWindow ?? DEFAULT_CONTEXT_WINDOW,

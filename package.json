@@ -1,6 +1,6 @@
 {
   "name": "cpa-provider",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "CLIProxyAPI provider extension for pi with automatic model discovery",
   "type": "module",
   "license": "MIT",
